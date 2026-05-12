@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard - Ganaderia Francisco Cordero</title>
+<meta name="viewport" content="width=1400, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Display&family=Libre+Caslon+Text:wght@400;700&family=DM+Serif+Display&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+
+  <!-- Boton Actualizar datos — inyectado directamente, sin depender de Babel cache -->
+  <script>
+  (function injectUpdateButton() {
+    function inject() {
+      var footer = document.querySelector('.sb-footer');
+      if (!footer) { setTimeout(inject, 300); return; }
+      // Eliminar cualquier boton duplicado antes de inyectar
+      var existing = document.querySelectorAll('#btn-actualizar-wrap, #btn-actualizar');
+      existing.forEach(function(el) { if(el.parentNode) el.parentNode.removeChild(el); });
+      // Tambien eliminar el wrapper si ya existe
+      var existingWrap = document.getElementById('btn-actualizar-wrap');
+      if (existingWrap) existingWrap.parentNode.removeChild(existingWrap);
+
+      // Leer hora de ultima actualizacion guardada
+      var ultimaAct = localStorage.getItem('ultima_actualizacion');
+      if (ultimaAct) {
+        footer.innerHTML = 'Francisco Cordero<br>Ultima actualizacion<br>' + ultimaAct + ' · v 1.1';
+      }
+
+      var wrap = document.createElement('div');
+      wrap.id = 'btn-actualizar-wrap';
+      wrap.style.cssText = 'padding: 14px 16px 0;';
+
+      var btn = document.createElement('button');
+      btn.id = 'btn-actualizar';
+      btn.textContent = 'Actualizar datos';
+      btn.style.cssText = [
+        'width:100%',
+        'display:flex',
+        'align-items:center',
+        'gap:9px',
+        'padding:10px 14px',
+        'background:rgba(200,40,26,0.15)',
+        'color:#e8a090',
+        'border:1px solid rgba(200,40,26,0.35)',
+        'border-radius:3px',
+        'font-family:IBM Plex Sans,sans-serif',
+        'font-size:13px',
+        'font-weight:500',
+        'cursor:pointer',
+        'text-align:left',
+        'transition:all 0.2s'
+      ].join(';');
+
+      var msg = document.createElement('div');
+      msg.id = 'btn-actualizar-msg';
+      msg.style.cssText = [
+        'margin-top:7px',
+        'font-size:10px',
+        'font-family:JetBrains Mono,monospace',
+        'color:rgba(230,220,198,0.35)',
+        'letter-spacing:0.04em',
+        'padding:0 2px'
+      ].join(';');
+      msg.textContent = 'Requiere servidor.bat activo';
+
+      btn.addEventListener('click', function() {
+        btn.disabled = true;
+        btn.textContent = 'Actualizando...';
+        btn.style.color = '#e8c87a';
+        btn.style.background = 'rgba(184,137,58,0.2)';
+        btn.style.border = '1px solid rgba(184,137,58,0.4)';
+        msg.style.color = 'rgba(230,220,198,0.5)';
+        msg.textContent = 'Conectando con el sistema...';
+
+        fetch('http://localhost:7331/actualizar', {
+          method: 'POST',
+          signal: AbortSignal.timeout(120000)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+          if (json.ok) {
+            btn.textContent = 'Actualizado';
+            btn.style.color = '#9ab87a';
+            btn.style.background = 'rgba(59,74,46,0.35)';
+            btn.style.border = '1px solid rgba(107,122,83,0.5)';
+            // Mostrar hora de actualización
+            var ahora = new Date();
+            var hora = ahora.toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'});
+            var fecha = ahora.toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit', year:'numeric'});
+            msg.textContent = json.animales + ' animales · ' + fecha + ' ' + hora;
+            msg.style.color = '#9ab87a';
+            // Guardar hora en localStorage y actualizar footer
+            var fechaHora = fecha.replace(/\//g,'.') + ' ' + hora;
+            localStorage.setItem('ultima_actualizacion', fechaHora);
+            var sbFooter = document.querySelector('.sb-footer');
+            if (sbFooter) {
+              sbFooter.innerHTML = 'Francisco Cordero<br>Ultima actualizacion<br>' + fechaHora + ' · v 1.1';
+            }
+            setTimeout(function() { location.reload(); }, 2500);
+          } else {
+            throw new Error(json.error || 'Error desconocido');
+          }
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          btn.textContent = 'Actualizar datos';
+          btn.style.color = '#e8a090';
+          btn.style.background = 'rgba(200,40,26,0.15)';
+          btn.style.border = '1px solid rgba(200,40,26,0.35)';
+          msg.style.color = '#ff8070';
+          if (err.name === 'TimeoutError') {
+            msg.textContent = 'Tiempo agotado (2 min)';
+          } else if (err.message && err.message.includes('fetch')) {
+            msg.textContent = 'Servidor no disponible - ejecuta servidor.bat';
+          } else {
+            msg.textContent = err.message ? err.message.slice(0,55) : 'Error de conexion';
+          }
+          setTimeout(function() {
+            msg.textContent = 'Requiere servidor.bat activo';
+            msg.style.color = 'rgba(230,220,198,0.35)';
+          }, 8000);
+        });
+      });
+
+      wrap.appendChild(btn);
+      wrap.appendChild(msg);
+      footer.parentNode.insertBefore(wrap, footer);
+    }
+    // Esperar a que React monte el sidebar
+    setTimeout(inject, 1500);
+
+    // Observer: restaurar hora cada vez que React re-renderice el footer
+    var observer = new MutationObserver(function() {
+      var footer = document.querySelector('.sb-footer');
+      var ultimaAct = localStorage.getItem('ultima_actualizacion');
+      if (footer && ultimaAct && !footer.innerHTML.includes(ultimaAct)) {
+        footer.innerHTML = 'Francisco Cordero<br>Ultima actualizacion<br>' + ultimaAct + ' · v 1.1';
+      }
+    });
+    // Observar cambios en el sidebar
+    setTimeout(function() {
+      var sidebar = document.querySelector('.sidebar');
+      if (sidebar) {
+        observer.observe(sidebar, { childList: true, subtree: true, characterData: true });
+      }
+    }, 2000);
+  })();
+  </script>
+</body>
+</html>
